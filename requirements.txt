@@ -1,0 +1,10 @@
+requests
+pandas
+pyspark
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pytest
+flake8
+apache-airflow
+pyyaml
