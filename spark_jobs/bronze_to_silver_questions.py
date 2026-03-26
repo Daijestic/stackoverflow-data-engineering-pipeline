@@ -1,4 +1,5 @@
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
 from glob import glob
 from src.utils.spark_session import create_spark_session
 
@@ -28,6 +29,7 @@ def main():
         F.from_unixtime("last_activity_date").cast("timestamp").alias("last_activity_date"),
         F.from_unixtime("last_edit_date").cast("timestamp").alias("last_edit_date"),
         F.from_unixtime("closed_date").cast("timestamp").alias("closed_date"),
+        F.to_date(F.from_unixtime("creation_date")).alias("date"),
         "closed_reason",
         "accepted_answer_id",
         F.col("owner.account_id").alias("owner_account_id"),
@@ -40,16 +42,24 @@ def main():
         F.col("owner.link").alias("owner_link"),
     )
 
+    window_spec = Window.partitionBy("question_id").orderBy(
+        F.col("last_activity_date").desc_nulls_last(),
+        F.col("creation_date").desc_nulls_last()
+    )
+
+
     df_silver = (
         df_silver
         .dropna(subset=["question_id"])
-        .dropDuplicates(["question_id"])
+        .withColumn("rn", F.row_number().over(window_spec))
+        .filter(F.col("rn") == 1)
+        .drop("rn")
     )
 
     df_silver.printSchema()
     df_silver.show(5, truncate=False)
 
-    df_silver.write.mode("overwrite").parquet(output_path)    
+    df_silver.write.mode("overwrite").partitionBy("date").parquet(output_path)    
     print(f"Saved silver questions to {output_path}")
 
 
